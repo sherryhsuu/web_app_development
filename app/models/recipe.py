@@ -1,73 +1,91 @@
 import sqlite3
 import os
-from contextlib import contextmanager
 
-# 取得資料庫檔案存放的目錄 instance/ (位於專案根目錄)
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'instance')
-DB_PATH = os.path.join(DB_DIR, 'database.db')
+# 設定資料庫檔案路徑 (對應到 instance/database.db)
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'instance', 'database.db')
 
-@contextmanager
 def get_db_connection():
-    # 若目錄不存在則建立一個
-    os.makedirs(DB_DIR, exist_ok=True)
+    """建立並回傳與 SQLite 資料庫的連線"""
+    # 確保 instance 目錄存在
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    
     conn = sqlite3.connect(DB_PATH)
-    # 將回傳結果設為 dict-like 的 Row 物件
+    # 將回傳結果結構化為 Dictionary 而不是 Tuple
     conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.commit()
-        conn.close()
+    return conn
 
 class Recipe:
     @staticmethod
-    def create(data):
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO recipes (title, description, ingredients, steps)
-                VALUES (?, ?, ?, ?)
-            ''', (data['title'], data.get('description', ''), data['ingredients'], data['steps']))
-            return cursor.lastrowid
-            
+    def create(title, ingredients, steps):
+        """新增食譜"""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO recipes (title, ingredients, steps) VALUES (?, ?, ?)',
+            (title, ingredients, steps)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        conn.close()
+        return new_id
+
     @staticmethod
-    def get_all(query=None):
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            if query:
-                # 簡單支援對 title 或 ingredients 的 LIKE 搜尋 (搜尋推薦食譜)
-                search_term = f"%{query}%"
-                cursor.execute('''
-                    SELECT * FROM recipes 
-                    WHERE title LIKE ? OR ingredients LIKE ? 
-                    ORDER BY created_at DESC
-                ''', (search_term, search_term))
-            else:
-                cursor.execute('SELECT * FROM recipes ORDER BY created_at DESC')
-            return [dict(row) for row in cursor.fetchall()]
-            
+    def get_all():
+        """取得所有食譜清單"""
+        conn = get_db_connection()
+        recipes = conn.execute('SELECT * FROM recipes ORDER BY created_at DESC').fetchall()
+        conn.close()
+        return recipes
+
     @staticmethod
     def get_by_id(recipe_id):
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,))
-            row = cursor.fetchone()
-            return dict(row) if row else None
-            
+        """用 ID 取得單一食譜"""
+        conn = get_db_connection()
+        recipe = conn.execute('SELECT * FROM recipes WHERE id = ?', (recipe_id,)).fetchone()
+        conn.close()
+        return recipe
+
     @staticmethod
-    def update(recipe_id, data):
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE recipes
-                SET title = ?, description = ?, ingredients = ?, steps = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ''', (data['title'], data.get('description', ''), data['ingredients'], data['steps'], recipe_id))
-            return cursor.rowcount > 0
+    def update(recipe_id, title, ingredients, steps):
+        """更新食譜內容"""
+        conn = get_db_connection()
+        conn.execute(
+            'UPDATE recipes SET title = ?, ingredients = ?, steps = ? WHERE id = ?',
+            (title, ingredients, steps, recipe_id)
+        )
+        conn.commit()
+        conn.close()
 
     @staticmethod
     def delete(recipe_id):
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM recipes WHERE id = ?', (recipe_id,))
-            return cursor.rowcount > 0
+        """刪除食譜"""
+        conn = get_db_connection()
+        conn.execute('DELETE FROM recipes WHERE id = ?', (recipe_id,))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def search_by_keyword(keyword):
+        """透過關鍵字搜尋食譜名稱"""
+        conn = get_db_connection()
+        # 使用 LIKE 達成包含字串搜尋
+        search_query = f"%{keyword}%"
+        recipes = conn.execute(
+            'SELECT * FROM recipes WHERE title LIKE ? ORDER BY created_at DESC', 
+            (search_query,)
+        ).fetchall()
+        conn.close()
+        return recipes
+
+    @staticmethod
+    def recommend_by_ingredients(ingredients_string):
+        """利用食材比對推薦適合的食譜 (MVP簡易版)"""
+        # MVP 階段直接對食材欄位做關鍵字搜尋
+        conn = get_db_connection()
+        search_query = f"%{ingredients_string}%"
+        recipes = conn.execute(
+            'SELECT * FROM recipes WHERE ingredients LIKE ? ORDER BY created_at DESC', 
+            (search_query,)
+        ).fetchall()
+        conn.close()
+        return recipes

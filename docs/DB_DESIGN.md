@@ -1,57 +1,32 @@
-# DB Design Document — 資料庫設計文件
+# 資料庫設計：食譜管理系統
 
-## 1. ER 圖
+本文件基於 `docs/PRD.md` 與 `docs/FLOWCHART.md`，定義系統（MVP 階段）所需的 SQLite 資料表結構與關聯。
+
+## 1. ER 圖（實體關係圖）
+
+由於目前採用極簡的 MVP 設計，我們專注於單一 `recipes` 資料表，將食材與步驟皆作為文字直接儲存在該資料表中。
 
 ```mermaid
 erDiagram
   RECIPES {
-    INTEGER id PK
+    INTEGER id PK "唯一識別碼"
     TEXT title "食譜名稱"
-    TEXT description "簡介"
-    TEXT ingredients "所需食材"
-    TEXT steps "烹飪步驟"
-    TEXT created_at "建立時間"
-    TEXT updated_at "最後更新時間"
+    TEXT ingredients "食材清單"
+    TEXT steps "料理步驟"
+    DATETIME created_at "建立時間"
   }
 ```
 
 ## 2. 資料表詳細說明
 
 ### `recipes` 資料表
-本系統採用單一資料表設計以符合 MVP 需求，各欄位詳細定義如下：
+
+負責儲存所有的食譜資訊。
 
 | 欄位名稱 | 型別 | 必填 | 說明 |
-| --- | --- | --- | --- |
-| `id` | `INTEGER` | 是 | Primary Key, 自動遞增 (AUTOINCREMENT)。 |
-| `title` | `TEXT` | 是 | 食譜名稱。 |
-| `description` | `TEXT` | 否 | 食譜的簡單介紹。 |
-| `ingredients` | `TEXT` | 是 | 食譜的所需食材，為求簡便與彈性，儲存為純文字 (可依照換行或逗點分隔)。未來依食材推薦將利用 `LIKE` 查詢運算實作。 |
-| `steps` | `TEXT` | 是 | 烹飪步驟，儲存為純文字即可。 |
-| `created_at` | `TEXT` | 是 | 建立時間，使用 `CURRENT_TIMESTAMP` 的 ISO 格式儲存。 |
-| `updated_at` | `TEXT` | 是 | 最後更新時間，編輯資料時觸發更新。 |
-
-## 3. SQL 建表語法
-
-實作的 SQL 建表存放於 `database/schema.sql` 中：
-
-```sql
-CREATE TABLE IF NOT EXISTS recipes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT,
-    ingredients TEXT NOT NULL,
-    steps TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-## 4. Python Model
-
-封裝的檔案位於 `app/models/recipe.py`。
-使用內建的 `sqlite3` 操作 `instance/database.db`，並支援：
-- `create(data)`
-- `get_all(query=None)`: 實作按標題與食材進行簡單字串 `LIKE` 搜尋。
-- `get_by_id(recipe_id)`
-- `update(recipe_id, data)`
-- `delete(recipe_id)`
+| :--- | :--- | :---: | :--- |
+| `id` | INTEGER | ✔ | Primary Key，自動遞增，作為每筆食譜的唯一識別碼。 |
+| `title` | TEXT | ✔ | 食譜的名稱（例如：「番茄炒蛋」）。 |
+| `ingredients` | TEXT | ✔ | 食材清單。為降低複雜度，以一般文字或換行分隔的方式儲存。 |
+| `steps` | TEXT | ✔ | 食譜的製作步驟說明。 |
+| `created_at` | DATETIME | ✔ | 該筆食譜被建立的時間，預設為資料庫當下時間（`CURRENT_TIMESTAMP`）。 |
