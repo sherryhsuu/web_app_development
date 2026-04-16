@@ -1,79 +1,79 @@
-# 流程圖設計文件：食譜管理系統
+# 流程圖設計：食譜管理系統
 
-本文件根據產品需求文件 (PRD) 與系統架構文件，視覺化使用者在食譜管理系統中的操作流程、系統背後的處理步驟，以及功能與路由的對照表。
+本文件基於產品需求文件 (`docs/PRD.md`) 與系統架構文件 (`docs/ARCHITECTURE.md`)，視覺化使用者的操作路徑與系統內部的資料流動，並盤點所有需要開發的路由與功能。
 
 ## 1. 使用者流程圖（User Flow）
 
-以下流程圖說明當使用者開啟網頁後，可以執行的各項功能及頁面轉換路徑：
+此流程圖描述使用者從開啟網站開始，如何操作食譜管理系統的各項主要功能（包含新增、查看、搜尋、推薦、編輯與刪除）。
 
 ```mermaid
 flowchart LR
-    A([使用者開啟網站]) --> B[首頁 - 食譜列表]
+    A([使用者開啟系統]) --> B[首頁 / 食譜總覽]
     
-    B --> C{選擇欲執行的功能}
+    B --> C{選擇主要操作}
     
-    %% 新增食譜路線
-    C -->|點擊「新增食譜」| D[填寫新增表單頁面]
-    D -->|送出表單| B
+    %% 新增食譜流程
+    C -->|新增| D[進入新增頁面]
+    D --> E[填寫食譜內容\n(名稱、食材、步驟)]
+    E --> F[送出並儲存]
+    F --> B
     
-    %% 搜尋/篩選路線
-    C -->|輸入「關鍵字 / 食材」| E[呈現篩選後的列表]
-    E --> C
+    %% 搜尋與推薦流程
+    C -->|關鍵字搜尋| G[輸入食譜名稱]
+    C -->|清理冰箱| H[輸入剩餘食材]
+    G --> I[查看搜尋/推薦結果]
+    H --> I
+    I -->|點選| J[食譜明細頁面]
     
-    %% 查看與編輯/刪除路線
-    C -->|點擊某個「食譜項目」| F[食譜明細頁面]
-    F --> G{在明細頁中選擇操作}
+    %% 查看明細與後續操作
+    C -->|直接瀏覽預設清單| J
+    J --> K{後續操作}
     
-    G -->|返回| B
-    G -->|點擊「編輯食譜」| H[填寫編輯表單頁面]
-    H -->|送出表單| F
-    G -->|點擊「刪除食譜」| I[確認並刪除]
-    I -->|刪除成功| B
+    K -->|編輯| L[進入編輯頁面]
+    L --> M[修改內容並送出]
+    M --> J
+    
+    K -->|刪除| N[同意確認刪除]
+    N --> B
+    K -->|返回| B
 ```
 
 ## 2. 系統序列圖（Sequence Diagram）
 
-以下序列圖以核心功能**「新增食譜」**為例，展示從使用者介面送出資料到成功寫入資料庫並重導向的完整過程：
+以下序列圖以「新增食譜功能」為例，展示從使用者在瀏覽器送出表單，到資料實際存入資料庫的完整互動過程：
 
 ```mermaid
 sequenceDiagram
     actor User as 使用者
-    participant Browser as 瀏覽器 (模板渲染)
-    participant Flask Route as 路由 (Controller)
-    participant Model as 邏輯模型 (Model)
-    participant DB as SQLite 資料庫
-
-    User->>Browser: 在表單頁面填妥食譜資訊並點擊送出
-    Browser->>Flask Route: 發送 POST /recipes 請求 (攜帶表單資料)
+    participant Browser as 瀏覽器
+    participant Flask as Flask Route (Controller)
+    participant Model as Recipe Model (資料層)
+    participant DB as SQLite (資料庫)
     
-    Note over Flask Route, DB: 開始處理新增邏輯
-    
-    Flask Route->>Model: 呼叫 Recipe.create(data) 傳入解析後的資料
-    Model->>DB: 執行 SQL INSERT INTO recipes ... 
-    DB-->>Model: 回傳寫入成功訊息
-    Model-->>Flask Route: 回傳新建立的 Recipe 物件
-    
-    Note over Flask Route, Browser: 處理畫面重導向
-    
-    Flask Route-->>Browser: 回傳 302 Redirect 至首頁 (食譜列表)
-    Browser->>Flask Route: 發送 GET / 請求
-    Flask Route->>Model: 取得最新所有食譜列表
-    Model->>DB: 執行 SELECT * FROM recipes
-    DB-->>Model: 回傳新列資料
-    Model-->>Flask Route: 列表資料
-    Flask Route-->>Browser: 使用最新資料重新渲染 index.html (首頁)
+    User->>Browser: 完成表單填寫並點擊「儲存食譜」
+    Browser->>Flask: POST /recipes (攜帶表單資料 payload)
+    Flask->>Model: 呼叫 Recipe.create(data) 傳入解析後的資料
+    Model->>DB: 執行 SQL: INSERT INTO recipes (...)
+    DB-->>Model: 新增成功
+    Model-->>Flask: 回傳建立成功與新食譜的結構資料
+    Flask-->>Browser: 返回 HTTP 302 重導向至首頁或該食譜明細
+    Browser-->>User: 畫面更新，看到剛才新增的食譜
 ```
 
 ## 3. 功能清單對照表
 
-對應上述流程與 PRD 需求，以下為系統功能對應的 URL 路徑與 HTTP 方法整理，提供後續 API/路由設計的參考：
+此對照表彙整了系統中所需實作的所有功能、對應的 URL 規則以及 HTTP 請求方法，作為後續「路由與 API 設計」階段的基礎參考：
 
-| 功能項目說明 | HTTP 方法 | 預計對應的 URL 路徑 | View (Jinja2) | 備註 |
-| --- | :---: | --- | --- | --- |
-| **首頁 / 所有食譜總覽** | `GET` | `/` 或 `/recipes` | `index.html` | 可結合查詢參數 `?q=關鍵字` 處理搜尋與食材推薦功能。 |
-| **進入新增食譜表單頁** | `GET` | `/recipes/new` | `form.html` | 呈現空白的輸入表單。 |
-| **提交新增食譜資料** | `POST` | `/recipes` | *(處理無畫面)* | 處理完後 302 重導向回首頁。 |
-| **查看單一食譜明細** | `GET` | `/recipes/<id>` | `show.html` | 顯示特定 ID 的食譜完整步驟與內容。 |
-| **進入編輯食譜表單頁** | `GET` | `/recipes/<id>/edit` | `form.html` | 呈現帶有原始資料的編輯表單。 |
-| **提交更新的食譜資料** | `POST` | `/recipes/<id>/update` | *(處理無畫面)* | 使用 HTML form 故用 POST，更新完成後重導回明細頁。 |
-| **確定刪除食譜** | `POST` | `/recipes/<id>/delete` | *(處理無畫面)* | 使用 form 觸發 POST，刪除完成後重導回首頁。 |
+| 功能項目說明 | URL 路徑 | HTTP 方法 | 備註說明 |
+| :--- | :--- | :--- | :--- |
+| **食譜總覽 (首頁)** | `/` 或 `/recipes` | `GET` | 列出目前存放的所有食譜 |
+| **進入新增食譜表單** | `/recipes/new` | `GET` | 回傳 HTML 表單頁面 |
+| **執行儲存新食譜** | `/recipes` | `POST` | 接收表單並寫入資料庫 |
+| **查看食譜明細** | `/recipes/<id>` | `GET` | 透過 ID 取得單一食譜的所有內容 |
+| **進入編輯食譜表單** | `/recipes/<id>/edit` | `GET` | 帶有原始資料的修改表單頁面 |
+| **執行更新食譜** | `/recipes/<id>/edit` | `POST` | 覆蓋舊資料（使用 POST 兼容基本 HTML 表單）|
+| **執行刪除食譜** | `/recipes/<id>/delete`| `POST` | 安全起見，刪除動作使用 POST |
+| **關鍵字搜尋食譜** | `/search` | `GET` | 透過 `?q=關鍵字` 進行名稱搜尋 |
+| **剩餘食材推薦** | `/recommend` | `GET` | 透過 `?ingredients=食材` 進行比對推薦 |
+
+> 註：傳統 HTML `<form>` 僅支援 `GET` 和 `POST`，因此這裡在編輯與刪除操作上我們選用 `POST` 並搭配特定的動作路徑（`/edit`, `/delete`），以符合不依賴純 JavaScript Fetch/Ajax 的簡單架構實作。
